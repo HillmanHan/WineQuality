@@ -1,0 +1,94 @@
+---
+title: "White Wine"
+author: "Team39"
+date: '2022-10-28'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(corrplot)
+library(ranger)
+library(vip)
+df <- read.csv(file.choose())
+summary(df)
+dropv <- c(1:2)
+winequal <- df[, -dropv]
+```
+
+```{r}
+numV <- which(sapply(df, is.numeric))
+corNumV <- cor(df[,numV],use="pairwise.complete.obs")
+corNumV_sort <- as.matrix(sort(corNumV[,'quality'],decreasing = TRUE)) 
+CorNumV_high <- names(which(apply(corNumV_sort, 1, function(x) abs(x)>0.1))) 
+corNumV1 <- corNumV[CorNumV_high,CorNumV_high]
+corrplot.mixed(corNumV1, tl.col="black", tl.pos = "lt", number.cex = 0.7) #plot
+```
+
+```{r}
+ggplot(df, aes(x = quality)) +
+      geom_bar()
+ggplot(df, aes(x = density, y = alcohol)) +
+      geom_point()
+ggplot(df, aes(x = density, y = total.sulfur.dioxide)) +
+      geom_point()
+```
+
+```{r}
+drop <- c(1:3)
+Pr <- prcomp(df[,-drop], scale = TRUE)
+plot(Pr, type = "l")
+Pr.var <- Pr$sdev^2 #getting the variance in PCA
+Pr.var.per <- round(Pr.var/sum(Pr.var)*100,1) #converting variance to percentage
+barplot(Pr.var.per[1:10], main = "Scree Plot", xlab = "Principle Component", ylab = "Percent Variation")
+#The PCA here does not serve well with too many categorical(dummy variables)
+
+demopr <- predict(Pr)
+plot(demopr[,1:2],pch = 1, main = "") 
+plot(demopr[,3:4],pch = 1, main = "")
+
+
+demoloadings <- Pr$rotation[,1:4] #the value is the correlation
+
+
+#Loading1
+v<-demoloadings[order(abs(demoloadings[,1]), decreasing=TRUE)[1:27],1]
+demoloadingfit <- lapply(1:27, function(k) ( t(v[1:k])%*%v[1:k] - 3/4 )^2)
+v[1:which.min(demoloadingfit)] 
+#This means it is high on + ones, and not on - ones. 
+#This means low on density, sugar, sulfur dioxide, but high on alcohol. Together they can mostly differentiate the quality of wines
+
+#Loading2
+v<-demoloadings[order(abs(demoloadings[,2]), decreasing=TRUE)[1:27],2]
+demoloadingfit <- lapply(1:27, function(k) ( t(v[1:k])%*%v[1:k] - 3/4 )^2)
+v[1:which.min(demoloadingfit)]
+
+#Loading3
+v<-demoloadings[order(abs(demoloadings[,3]), decreasing=TRUE)[1:27],3]
+demoloadingfit <- lapply(1:27, function(k) ( t(v[1:k])%*%v[1:k] - 3/4 )^2)
+v[1:which.min(demoloadingfit)]
+
+#Loading4
+v<-demoloadings[order(abs(demoloadings[,4]), decreasing=TRUE)[1:27],4]
+demoloadingfit <- lapply(1:27, function(k) ( t(v[1:k])%*%v[1:k] - 3/4 )^2)
+v[1:which.min(demoloadingfit)]
+```
+
+```{r}
+dv_RF <- which(names(df) %in% "quality")
+
+RFmodel_all <- ranger(quality~.,data = winequal, num.trees = 500, respect.unordered.factors = "order", importance='impurity') #Fitting all data into the model
+
+ranger::importance(RFmodel_all) #specify random forest
+vip(RFmodel_all) #graphing
+```
+
+
+
+
+
